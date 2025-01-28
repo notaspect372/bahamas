@@ -68,7 +68,7 @@ def close_popup(driver):
     except Exception:
         pass
 
-def scrape_data(brands, num_pages_to_scrape):      # Configure Edge options
+def scrape_data(brands, start_page, end_page):      # Configure Edge options
     options = Options()
     options.add_argument("--headless")  
     options.add_argument("--disable-gpu")  
