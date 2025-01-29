@@ -345,9 +345,9 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
 
 
 # enter the brand urls here
-brands = ["https://floorscenter.com/collections/daltile"]
+brands = ["https://floorscenter.com/collections/ms-international"]
 
-start_page = 21
-end_page = 40
+start_page = 31
+end_page = 45
 
 scrape_data(brands, start_page, end_page)
