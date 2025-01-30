@@ -8,6 +8,7 @@ import time
 import random
 from selenium.webdriver.edge.options import Options
 import os
+from bs4 import BeautifulSoup
 
 
 def slow_smooth_scroll(driver, total_scroll_time=15):
@@ -142,17 +143,22 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
 
                 title = driver.find_element(By.CSS_SELECTOR, "h1.product-meta__title.heading.h1").text.strip()
 
+                # Extract handle from the URL
                 handle = product_url.split('/')[-1].split('?')[0]
 
+                # Locate all variations
                 variations = driver.find_elements(By.CSS_SELECTOR, ".variant-swatch__radio")[::-1]
                 num_variations = len(variations)
 
+                # Get all images
                 image_elements = driver.find_elements(By.CSS_SELECTOR, ".product-gallery__thumbnail img")
                 all_image_src = [img.get_attribute("src") for img in image_elements]
 
+                # Filtered images (non-variation images)
                 filtered_images = all_image_src[:len(all_image_src) - num_variations]
                 variation_images = all_image_src[-num_variations:][::-1]  # Reverse variation images
 
+                # Breadcrumb type
                 breadcrumb_type = ""
                 try:
                     breadcrumb_type = driver.find_element(
@@ -161,10 +167,13 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
                 except:
                     pass
 
+                # Vendor
                 vendor = driver.find_element(By.CSS_SELECTOR, "a.product-meta__vendor").text.strip()
 
+                # Option 1 (e.g., Size)
                 option1_value = driver.find_element(By.CSS_SELECTOR, "span.block-swatch__item-text").text.strip()
 
+                # SEO description
                 product_description_box = ""
                 try:
                     seo_description_element = driver.find_element(By.CSS_SELECTOR, "div.rte.text--pull > p")
@@ -172,34 +181,7 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
                 except:
                     pass
 
-                price_per_sq_ft_text = ""
-                try:
-                    price_per_sq_ft_element = driver.find_element(By.CSS_SELECTOR, "span.price.price--highlight")
-                    price_per_sq_ft_text = price_per_sq_ft_element.text.strip().replace("Sale price", "").strip()
-                except:
-                    pass
-
-                coverage_area = ""
-                try:
-                    coverage_area_text = driver.find_element(By.ID, "boxCoverage").text.strip()
-                    coverage_area = coverage_area_text.split(":")[1].split()[0]
-                except:
-                    pass
-
-                pcs_per_box = ""
-                try:
-                    pcs_per_box_text = driver.find_element(By.ID, "pcsPerCarton").text.strip()
-                    pcs_per_box = pcs_per_box_text.split(":")[1].strip()
-                except:
-                    pass
-
-                original_price = ""
-                try:
-                    original_price_text = driver.find_element(By.CSS_SELECTOR, "span.price.price--compare").text.strip()
-                    original_price = original_price_text.replace("Regular price", "").strip()
-                except:
-                    pass
-
+                # Applications and usage tags
                 application = ""
                 usage = ""
                 try:
@@ -214,8 +196,9 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
                 except:
                     pass
 
-                tags = ", ".join(filter(None, [application, usage]))
-
+                tags = application + usage
+                tags = tags.replace(" | ", ", ")
+                # Surface type attribute
                 surface_attribute = ""
                 try:
                     surface_type = driver.find_element(By.XPATH, "//tr[th[contains(text(), 'Surface Type:')]]").text.strip()
@@ -223,50 +206,95 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
                 except:
                     pass
 
+                # Loop through variations
                 image_positions = list(range(1, len(filtered_images) + 1))
+
                 length_of_variations = len(variations)
                 for idx, variation in enumerate(variations):
                     label = driver.find_element(By.CSS_SELECTOR, f"label[for='{variation.get_attribute('id')}']")
-            
+
                     # Scroll to the label and click it
                     ActionChains(driver).move_to_element(label).perform()
                     WebDriverWait(driver, 10).until(EC.element_to_be_clickable(label)).click()
                     time.sleep(2)  # Allow page to update
-            
+
                     # Extract variation-specific details
                     current_url = driver.current_url
                     variant_id = current_url.split("variant=")[-1]
-            
+
                     variation_name = variation.get_attribute("value")
                     option2_value = driver.find_element(By.CSS_SELECTOR, "span.product-form__selected-value").text.strip()
                     variant_sku = driver.find_element(By.CSS_SELECTOR, "span.product-meta__sku-number").text.strip()
-                    variant_price = driver.find_element(By.CSS_SELECTOR, "span.box-price-pcsPerCarton").get_attribute("data-price")
-                    variant_compare_price = driver.find_element(By.CSS_SELECTOR, "span.box-price-pcsPerCarton").get_attribute("data-compare-price")
-            
-                    variant_barcode = ""
+
+                    # Find all price elements
+                    price_elements = driver.find_elements(By.CSS_SELECTOR, "span.box-price-pcsPerCarton")
+
+                    # Extract correct price based on variant_id
+                    if length_of_variations>1:
+                        for price_element in price_elements:
+                            if price_element.get_attribute("data-id") == variant_id:
+                                variant_price = price_element.get_attribute("data-price")
+                                variant_compare_price = price_element.get_attribute("data-compare-price")
+                                break  
+                    else:
+                        variant_price = driver.find_element(By.CSS_SELECTOR, "span.box-price-pcsPerCarton").get_attribute("data-price")
+                        variant_compare_price = driver.find_element(By.CSS_SELECTOR, "span.box-price-pcsPerCarton").get_attribute("data-compare-price")
+
+
+                    price_per_sq_ft_text = ""
                     try:
-                        variant_barcode = driver.find_element(By.CSS_SELECTOR, "tr.table-row-spec.barcode-container.d-none").get_attribute("data-value")
+                        price_per_sq_ft_element = driver.find_element(By.CSS_SELECTOR, "span.price.price--highlight")
+                        price_per_sq_ft_text = price_per_sq_ft_element.text.strip().replace("Sale price", "").strip()
+                    except Exception as e:
+                        print(f"Price Per Sq Ft Error: {e}")
+
+                
+                    original_price = ""
+                    try:
+                        original_price_text = driver.find_element(By.CSS_SELECTOR, "span.price.price--compare").text.strip()
+                        original_price = original_price_text.replace("Regular price", "").strip()
                     except:
                         pass
-            
+
+                   
+                    if length_of_variations > 1:
+                        variant_barcode = ""
+                        try:
+                            variant_barcode = driver.find_element(By.CSS_SELECTOR, "tr.table-row-spec.barcode-container.d-none").get_attribute("data-value")
+                        except:
+                            pass
+                    else:
+                        variant_barcode = ""
+                        try:
+                            barcode_element = driver.find_element(By.CSS_SELECTOR, "tr.table-row-spec.barcode-container")
+                            variant_barcode = barcode_element.get_attribute("data-value")
+                        except:
+                            pass
+
                     weight = ""
                     try:
                         weight_container = driver.find_element(By.XPATH, "//tr[th[contains(text(), 'Weight:')]]")
                         weight = weight_container.find_element(By.CSS_SELECTOR, "td.spec-values").text.strip()
                     except:
                         pass
-            
+
+                    uom = row_html = driver.find_element(By.XPATH, f"//tr[th[contains(text(), 'UOM:')]]").get_attribute("outerHTML")
+                    # get the text from uom
+                    uom = uom.split('<td class="spec-values">')[1].split('</td>')[0]
+                    
+
+
                     # Find all <tr> tags with the matching data-id
                     rows = driver.find_elements(By.CSS_SELECTOR, f"tr[data-id='{variant_id}']")
                     tr_tags_html = [row.get_attribute("outerHTML") for row in rows]
-            
+
                     # Initialize the relevant table HTML
                     relevant_table_html = "<table>"
-            
+
                     # Add the <tr> tags matching the data-id to relevant_table_html
                     for tr_tag in tr_tags_html:
                         relevant_table_html += tr_tag
-            
+
                     # Collect additional fields by matching specific table headers
                     if length_of_variations>1:
                         fields_to_append = [
@@ -281,7 +309,7 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
                                         "Design", "Ends", "Edges", "Surface Type", "Installation Type",
                                         "Usage", "Application"
                                     ]
-            
+
                     for field in fields_to_append:
                         try:
                             # Locate the <tr> row with the specific field header and add its outerHTML
@@ -290,20 +318,52 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
                         except Exception as e:
                             # Skip if the field is not found
                             print(f"Field '{field}' not found. Skipping. Error: {e}")
-            
+
                     # Close the table HTML
                     relevant_table_html += "</table>"
-            
-            
+
+
                     
                     seo_description_element = driver.find_element(By.CSS_SELECTOR, "div.rte.text--pull > p")
                     variant_description = seo_description_element.text.strip()
+
+
+                    soup = BeautifulSoup(relevant_table_html, "html.parser")
+
+                    # Extract Coverage Area from <tr> where <th> contains 'Coverage Area'
+                    coverage_area = ""
+                    try:
+                        coverage_area_element = soup.find("tr", class_="coverage-area-container")
+                        if coverage_area_element:
+                            coverage_area = coverage_area_element["data-value"].strip()
+                    except:
+                        pass
+
+                    # Extract PCs per Box from <tr> where <th> contains 'PCs per Box'
+                    pcs_per_box = ""
+                    try:
+                        pcs_per_box_element = soup.find("tr", class_="pcsPerBox-container")
+                        if pcs_per_box_element:
+                            pcs_per_box = pcs_per_box_element["data-value"].strip()
+                    except:
+                        pass
+
+                    selected_image_url = ""
+                    if length_of_variations>1:
+                        try:
+                            selected_image_element = driver.find_element(By.CSS_SELECTOR, ".product-gallery__carousel-item.is-selected img")
+                            selected_image_url = selected_image_element.get_attribute("src")
+                        except Exception as e:
+                            print(f"Error finding selected image: {e}")
             
+                    else:
+                        selected_image_url = all_image_src[1]
+
                     # Append data
                     scraped_data.append({
                         "Handle": handle,
                         "Title": title,
-                        "Variation": variation_name,
+                        "Variation":variation_name,
                         "Body (HTML)": relevant_table_html,
                         "Vendor": vendor,
                         "Type": breadcrumb_type,
@@ -311,7 +371,7 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
                                                     "Option1 Name": "Color",
                         "Option1 Value": option2_value,
                                                     "Option2 Name": "Size",
-            
+
                         "Option2 Value": option1_value,
                         "Variant SKU": variant_sku,
                                                     "Variant Grams": " ",
@@ -326,30 +386,31 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
                                         "Variant Barcode": variant_barcode,
                                                                     "Variant Weight Unit":" ",
                                         "Gift Card": "FALSE",
-            
+
                         "Weight": weight,
                         "SEO Title": title,
                         "Product description box = Product Details Field (product.metafields.custom.product_details_field)": product_description_box,
                         "Google Shopping / Condition": " ",
                                         "Status": "active",
                                                                     "Variant Description": variant_description,
-            
+
                         "Coverage Area (product.metafields.custom.coverage_area)": coverage_area,
                         "pcsperbox (product.metafields.custom.pcsperbox)": pcs_per_box,
                         "Price Per Sq Ft (product.metafields.custom.price_per_sq_ft)": price_per_sq_ft_text,
                         "Image Src": filtered_images[idx] if idx < len(filtered_images) else "",
-                        "Variant Image": variation_images[idx] if idx < len(variation_images) else "",
+                        "Variant Image": selected_image_url,
                         "Image Position": image_positions[idx] if idx < len(image_positions) else None,
                         "Original Price": original_price,
                         "Surface Type (product.metafields.custom.surface_type)": surface_attribute,
+                        "uom (product.metafields.custom.uom)": uom,
                     })
-
                 print(f"Scraped product {count}: {option2_value}")
                 count += 1
 
             except Exception as e:
                 print(f"Error scraping product {product_url}: {e}")
 
+    
     df = pd.DataFrame(scraped_data)
     df.to_excel("scraped_data.xlsx", index=False, engine='openpyxl')
 
@@ -357,7 +418,7 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
     os.makedirs(output_dir, exist_ok=True)
     
     # Save the Excel file
-    output_file = os.path.join(output_dir, "scraped_data.xlsx")
+    output_file = os.path.join(output_dir, "scraped_data.csv")
     df.to_excel(output_file, index=False, engine='openpyxl')
     
     print(f"Scraped data saved to {output_file}")
@@ -368,7 +429,7 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
 # enter the brand urls here
 brands = ["https://floorscenter.com/collections/ms-international"]
 
-start_page = 36
-end_page = 42
+start_page = 41
+end_page = 60
 
 scrape_data(brands, start_page, end_page)
