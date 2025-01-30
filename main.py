@@ -224,61 +224,82 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
                     pass
 
                 image_positions = list(range(1, len(filtered_images) + 1))
+                length_of_variations = len(variations)
                 for idx, variation in enumerate(variations):
                     label = driver.find_element(By.CSS_SELECTOR, f"label[for='{variation.get_attribute('id')}']")
-
+            
+                    # Scroll to the label and click it
                     ActionChains(driver).move_to_element(label).perform()
                     WebDriverWait(driver, 10).until(EC.element_to_be_clickable(label)).click()
-                    time.sleep(2)  
-
+                    time.sleep(2)  # Allow page to update
+            
+                    # Extract variation-specific details
                     current_url = driver.current_url
                     variant_id = current_url.split("variant=")[-1]
-
+            
                     variation_name = variation.get_attribute("value")
                     option2_value = driver.find_element(By.CSS_SELECTOR, "span.product-form__selected-value").text.strip()
                     variant_sku = driver.find_element(By.CSS_SELECTOR, "span.product-meta__sku-number").text.strip()
                     variant_price = driver.find_element(By.CSS_SELECTOR, "span.box-price-pcsPerCarton").get_attribute("data-price")
                     variant_compare_price = driver.find_element(By.CSS_SELECTOR, "span.box-price-pcsPerCarton").get_attribute("data-compare-price")
-
+            
                     variant_barcode = ""
                     try:
                         variant_barcode = driver.find_element(By.CSS_SELECTOR, "tr.table-row-spec.barcode-container.d-none").get_attribute("data-value")
                     except:
                         pass
-
+            
                     weight = ""
                     try:
                         weight_container = driver.find_element(By.XPATH, "//tr[th[contains(text(), 'Weight:')]]")
                         weight = weight_container.find_element(By.CSS_SELECTOR, "td.spec-values").text.strip()
                     except:
                         pass
-
+            
+                    # Find all <tr> tags with the matching data-id
                     rows = driver.find_elements(By.CSS_SELECTOR, f"tr[data-id='{variant_id}']")
                     tr_tags_html = [row.get_attribute("outerHTML") for row in rows]
-
+            
+                    # Initialize the relevant table HTML
                     relevant_table_html = "<table>"
-
+            
+                    # Add the <tr> tags matching the data-id to relevant_table_html
                     for tr_tag in tr_tags_html:
                         relevant_table_html += tr_tag
-
-                    fields_to_append = [
-                        "Weight", "Length", "Thickness", "Collection", "Composition",
-                        "Design", "Ends", "Edges", "Surface Type", "Installation Type",
-                        "Usage", "Application"
-                    ]
-
+            
+                    # Collect additional fields by matching specific table headers
+                    if length_of_variations>1:
+                        fields_to_append = [
+                                        "Weight", "Width","UOM","Length", "Thickness", "Collection", "Composition",
+                                        "Design", "Ends", "Edges", "Surface Type", "Installation Type",
+                                        "Usage", "Application"
+                                    ]
+                        
+                    else:
+                        fields_to_append = [
+                                        "PCs per box","Coverage Area","Color Shade","Weight", "Width","UOM","Length", "Thickness", "Collection", "Composition",
+                                        "Design", "Ends", "Edges", "Surface Type", "Installation Type",
+                                        "Usage", "Application"
+                                    ]
+            
                     for field in fields_to_append:
                         try:
+                            # Locate the <tr> row with the specific field header and add its outerHTML
                             row_html = driver.find_element(By.XPATH, f"//tr[th[contains(text(), '{field}:')]]").get_attribute("outerHTML")
                             relevant_table_html += row_html
                         except Exception as e:
+                            # Skip if the field is not found
                             print(f"Field '{field}' not found. Skipping. Error: {e}")
-
+            
+                    # Close the table HTML
                     relevant_table_html += "</table>"
-
+            
+            
+                    
                     seo_description_element = driver.find_element(By.CSS_SELECTOR, "div.rte.text--pull > p")
                     variant_description = seo_description_element.text.strip()
-
+            
+                    # Append data
                     scraped_data.append({
                         "Handle": handle,
                         "Title": title,
@@ -290,7 +311,7 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
                                                     "Option1 Name": "Color",
                         "Option1 Value": option2_value,
                                                     "Option2 Name": "Size",
-
+            
                         "Option2 Value": option1_value,
                         "Variant SKU": variant_sku,
                                                     "Variant Grams": " ",
@@ -305,14 +326,14 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
                                         "Variant Barcode": variant_barcode,
                                                                     "Variant Weight Unit":" ",
                                         "Gift Card": "FALSE",
-
+            
                         "Weight": weight,
                         "SEO Title": title,
                         "Product description box = Product Details Field (product.metafields.custom.product_details_field)": product_description_box,
                         "Google Shopping / Condition": " ",
                                         "Status": "active",
                                                                     "Variant Description": variant_description,
-
+            
                         "Coverage Area (product.metafields.custom.coverage_area)": coverage_area,
                         "pcsperbox (product.metafields.custom.pcsperbox)": pcs_per_box,
                         "Price Per Sq Ft (product.metafields.custom.price_per_sq_ft)": price_per_sq_ft_text,
@@ -347,7 +368,7 @@ def scrape_data(brands, start_page, end_page):      # Configure Edge options
 # enter the brand urls here
 brands = ["https://floorscenter.com/collections/ms-international"]
 
-start_page = 31
-end_page = 45
+start_page = 36
+end_page = 42
 
 scrape_data(brands, start_page, end_page)
