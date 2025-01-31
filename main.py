@@ -19,7 +19,7 @@ driver = webdriver.Chrome(options=options)
 
 # List of base URLs to scrape
 base_urls = [
-    "https://www.bahamasrealty.com/listings/?minBedrooms=1&maxBedrooms=1&minBathrooms=1&status=Active,Pending,Active+Under+Contract,Closed,CNT,PCG",
+    "https://www.bahamasrealty.com/listings/?status=Active,Pending,Active+Under+Contract,Closed,CNT,PCG",
     # Add more URLs here
 ]
 
