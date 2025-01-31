@@ -129,7 +129,7 @@ output_dir = "output"
 os.makedirs(output_dir, exist_ok=True)
 
 # 1. Read property URLs from the text file (each URL on a new line)
-with open("property_urls.txt", "r") as file:
+with open("unique_urls.txt", "r") as file:
     property_urls = [line.strip() for line in file if line.strip()]
 
 # 2. Loop over each URL, scrape property details, and store the results
