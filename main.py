@@ -1,5 +1,8 @@
 import os
+import tempfile
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 import time
 import pandas as pd
@@ -11,8 +14,23 @@ from urllib.parse import quote
 output_dir = "output"
 os.makedirs(output_dir, exist_ok=True)
 
-# Set up the Selenium WebDriver
-driver = webdriver.Chrome()  # Use webdriver.Edge() if you're using Edge
+# Create a temporary directory for Chrome user data
+chrome_user_data_dir = tempfile.mkdtemp()
+
+# Set up Chrome options for GitHub Actions (headless, etc.)
+chrome_options = Options()
+chrome_options.add_argument("--headless")  # Run headless in GitHub Actions
+chrome_options.add_argument("--disable-dev-shm-usage")
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument(f"--user-data-dir={chrome_user_data_dir}")
+
+# Optionally, if your ChromeDriver is in a specific location, specify the executable path.
+# For example:
+# chrome_service = Service("/path/to/chromedriver")
+# driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+
+# Otherwise, if chromedriver is in PATH:
+driver = webdriver.Chrome(options=chrome_options)
 
 # List of base URLs to scrape
 base_urls = [
