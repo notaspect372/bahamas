@@ -1,21 +1,18 @@
+import os
 from selenium import webdriver
 from bs4 import BeautifulSoup
 import time
 import pandas as pd
 import re
-import os
+import json
 from urllib.parse import quote
 
-# Ensure the output directory exists
+# Create output directory if it doesn't exist
 output_dir = "output"
 os.makedirs(output_dir, exist_ok=True)
 
-# Set up the Selenium WebDriver (headless mode for GitHub Actions)
-options = webdriver.ChromeOptions()
-options.add_argument("--headless")
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
-driver = webdriver.Chrome(options=options)
+# Set up the Selenium WebDriver
+driver = webdriver.Chrome()  # Use webdriver.Edge() if you're using Edge
 
 # List of base URLs to scrape
 base_urls = [
@@ -29,13 +26,17 @@ def scrape_property_urls(base_url):
     property_links = []
 
     while True:
+        # Construct the paginated URL
         url = f"{base_url}&page={page_number}"
         print(f"Visiting: {url}")
         driver.get(url)
-        time.sleep(5)  # Adjust the delay as needed
-
+        
+        # Wait for the page to load fully
+        time.sleep(5)
+        
+        # Parse the page source with BeautifulSoup
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-
+        
         # Extract property URLs on the current page
         page_links = []
         for link in soup.find_all('a', class_='listing__link'):
@@ -45,52 +46,67 @@ def scrape_property_urls(base_url):
                 print(full_url)
                 page_links.append(full_url)
 
+        # Break the loop if no new property URLs are found
         if not page_links:
-            break  # Stop if no more property links found
-
+            break
+        
+        # Append the current page's property links to the main list
+        print(f"Total links on page {page_number}: {len(page_links)}")
         property_links.extend(page_links)
+        
+        # Increment the page number for the next iteration
         page_number += 1
 
     return property_links
 
-# Function to get latitude and longitude from Google Maps
 def get_lat_long_from_google_maps(address):
+    """
+    Fetch latitude and longitude from Google Maps by searching for the address.
+    """
+    # Encode the address for use in a URL
     search_url = f"https://www.google.com/maps/search/{quote(address)}"
-    latitude, longitude = 'N/A', 'N/A'
-
+    
+    # Initialize default values
+    latitude = 'N/A'
+    longitude = 'N/A'
+    
     try:
+        # Navigate to the Google Maps search URL
         driver.get(search_url)
-        time.sleep(5)
+        time.sleep(5)  # Allow time for Google Maps to load
+        
+        # Get the current URL and extract latitude and longitude using a regex pattern
         current_url = driver.current_url
         url_match = re.search(r'@(-?\d+\.\d+),(-?\d+\.\d+)', current_url)
-
+        
         if url_match:
-            latitude, longitude = url_match.group(1), url_match.group(2)
+            latitude = url_match.group(1)
+            longitude = url_match.group(2)
             print(f"Latitude: {latitude}, Longitude: {longitude}")
         else:
-            print("Google Maps could not find latitude and longitude.")
+            print("Google Maps could not find latitude and longitude. Falling back to default values.")   
     except Exception as e:
-        print(f"Error fetching latitude and longitude: {e}")
-
+        print(f"Error occurred while fetching latitude and longitude: {e}")
+    
     return latitude, longitude
 
 # Function to scrape property details from a property URL
 def scrape_property_details(url):
     driver.get(url)
-    time.sleep(3)  # Adjust as needed
+    time.sleep(3)  # Adjust the delay as needed
     soup = BeautifulSoup(driver.page_source, 'html.parser')
-
-    # Scrape property details
+    
+    # Scrape details with error handling
     name = soup.find('meta', property='og:title')
     name = name['content'] if name else 'N/A'
-
+    
     address_section = soup.find('span', class_='address')
     address = address_section.text.strip() if address_section else 'N/A'
-
+    
     price_section = soup.find('span', class_='price-value')
     price = price_section.text.strip() if price_section else 'N/A'
-
-    # Scrape characteristics
+    
+    # Characteristics (store in key-value pairs)
     characteristics = {}
     characteristics_section = soup.find('div', {'id': re.compile(r'info-callout-\d+')})
     if characteristics_section:
@@ -101,11 +117,13 @@ def scrape_property_details(url):
 
     area = characteristics.get("Square Feet", "-")
 
-    # Scrape description
+    # Description
     description_section = soup.find('div', id="info-callout-119816")
-    description = description_section.find('div').text.strip() if description_section else 'N/A'
+    if description_section:
+        description = description_section.find('div').text.strip()
+    else:
+        description = 'N/A'
 
-    # Scrape features
     features = {}
     features_section = soup.find('div', class_='custom-field-group', id='primary-categories')
     if features_section:
@@ -132,20 +150,22 @@ def scrape_property_details(url):
 # Main process
 for base_url in base_urls:
     all_property_links = scrape_property_urls(base_url)
-    print(f"length of property urls: {all_property_links}")
+    print(f"Total property URLs found: {len(all_property_links)}")
     all_data = []
-
+    
+    # Scrape details for each property URL
     for property_url in all_property_links:
         data = scrape_property_details(property_url)
         print(data)
         all_data.append(data)
-
-    # Convert data to DataFrame and save to Excel
+    
+    # Convert data to DataFrame and save to Excel inside the output directory
     df = pd.DataFrame(all_data)
-    file_name = re.sub(r'[\\/*?:"<>|]', "", f"{base_url.replace('/', '_').replace(':', '')}.xlsx")
-    output_path = os.path.join(output_dir, file_name)
-    df.to_excel(output_path, index=False)
-    print(f"Saved data to {output_path}")
+    # Clean the base URL for the file name by replacing problematic characters
+    safe_base = re.sub(r'[\\/*?:"<>|]', "", f"{base_url.replace('/', '_').replace(':', '')}")
+    file_name = os.path.join(output_dir, f"{safe_base}.xlsx")
+    df.to_excel(file_name, index=False)
+    print(f"Saved data for {base_url} to {file_name}")
 
-# Close the driver
+# Close the driver after scraping
 driver.quit()
