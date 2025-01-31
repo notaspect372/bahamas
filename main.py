@@ -39,7 +39,7 @@ chrome_options.add_argument(
 # driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
 driver = webdriver.Chrome(options=chrome_options)
 
-# Set a default wait (you can adjust the timeout as needed)
+# Set up an explicit wait
 wait = WebDriverWait(driver, 15)
 
 # List of base URLs to scrape
@@ -64,6 +64,10 @@ def scrape_property_urls(base_url):
             wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "a.listing__link")))
         except Exception as e:
             print(f"Timeout waiting for listings on page {page_number}: {e}")
+        
+        # Scroll down to trigger any lazy loading
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(3)  # Give time for additional content to load
         
         # Optionally, save the page source for debugging:
         # with open(os.path.join(output_dir, f"page_{page_number}.html"), "w", encoding="utf-8") as f:
@@ -102,10 +106,8 @@ def get_lat_long_from_google_maps(address):
     
     try:
         driver.get(search_url)
-        # Wait for the URL to update after the search (or a specific element if available)
-        time.sleep(5)  # A brief pause might be necessary if no element is available to wait on
-        
-        # Extract latitude and longitude from the current URL using regex
+        # Wait for a short period to allow Google Maps to process the search
+        time.sleep(5)
         current_url = driver.current_url
         url_match = re.search(r'@(-?\d+\.\d+),(-?\d+\.\d+)', current_url)
         if url_match:
@@ -123,7 +125,6 @@ def scrape_property_details(url):
     """Scrape detailed information for a single property URL."""
     driver.get(url)
     
-    # Wait for a key element to ensure the property page is loaded
     try:
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "meta[property='og:title']")))
     except Exception as e:
