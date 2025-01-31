@@ -132,6 +132,7 @@ def scrape_property_details(url):
 # Main process
 for base_url in base_urls:
     all_property_links = scrape_property_urls(base_url)
+    print(f"length of property urls: {all_property_links}")
     all_data = []
 
     for property_url in all_property_links:
